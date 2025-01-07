@@ -36,6 +36,7 @@ REQUIRED = [
     "statsmodels",
     "scipy",
     "numba",
+    "numpy<2",
     "nlopt",
     "pydantic>=2.0",
     "attrs",
