@@ -19,6 +19,7 @@
 """
 import numpy as np
 import numba
+import pytest
 
 from eemeter.common.utils import (
     np_clip,
@@ -72,14 +73,12 @@ def test_np_clip():
     except ValueError as e:
         assert str(e) == "a_min must be less than or equal to a_max"
 
-
 def test_OoM():
     # Test case 1: Test with a scalar input - should give an error as the declaration must have an array input
     x = 5000
-    try:
+    with pytest.raises(Exception) as e:
         OoM(x)
-    except numba.core.errors.TypingError as e:
-        assert str(e).startswith("Failed in nopython mode pipeline")
+    assert e.type in [numba.core.errors.TypingError, TypeError] #will depend whether using JIT
 
     # Test case 2: Test with an array input
     x = np.array([100, 1000, 10000, 100000])
