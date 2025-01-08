@@ -202,9 +202,9 @@ def test_meter_data_to_csv(sample_metadata):
         meter_data_to_csv(df, f)
         f.seek(0)
         if platform.system() == "Windows":
-            assert f.read() == ("start,value\n" "2017-01-01 00:00:00+00:00,5\n")
-        else:
             assert f.read() == ("start,value\n\n" "2017-01-01 00:00:00+00:00,5\n\n")
+        else:
+            assert f.read() == ("start,value\n" "2017-01-01 00:00:00+00:00,5\n")
 
 
 def test_temperature_data_from_csv(sample_metadata):
