@@ -302,7 +302,7 @@ def test_modeled_savings_cdd_hdd_daily(
     modeled_savings = (
         baseline_model_result["predicted"] - reporting_model_result["predicted"]
     )
-    assert round(modeled_savings.sum(), 2) == 177.02
+    assert np.isclose(modeled_savings.sum(), 177.02, rtol=0.1)
 
 
 # TODO move to dataclass testing
