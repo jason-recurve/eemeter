@@ -24,6 +24,9 @@ from .__version__ import __title__, __description__, __url__, __version__
 from .__version__ import __author__, __author_email__, __license__
 from .__version__ import __copyright__
 
+from numba import config
+config.DISABLE_JIT = True
+
 from .common import *
 from . import (
     eemeter,
@@ -32,6 +35,3 @@ from . import (
 
 # Set default logging handler to avoid "No handler found" warnings.
 _logging.getLogger(__name__).addHandler(_logging.NullHandler())
-
-from numba import config
-config.DISABLE_JIT = True
