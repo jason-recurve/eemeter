@@ -24,8 +24,11 @@ from .__version__ import __title__, __description__, __url__, __version__
 from .__version__ import __author__, __author_email__, __license__
 from .__version__ import __copyright__
 
-import os
-os.environ["DISABLE_JIT"] = "1"
+import platform
+if platform.system() == "Windows":
+    # numba JIT breaks on Windows with int32/int64 return types
+    from numba import config
+    config.DISABLE_JIT = True
 
 from .common import *
 from . import (
