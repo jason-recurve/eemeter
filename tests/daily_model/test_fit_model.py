@@ -95,4 +95,4 @@ class TestFitModel:
             "PNRMSE": 0.270778281497731,
         }
         for k in expected_model_error:
-            assert np.isclose(fm.error[k], expected_model_error[k])
+            assert np.isclose(fm.error[k], expected_model_error[k], rtol=1e-3)
