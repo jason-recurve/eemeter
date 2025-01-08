@@ -24,7 +24,7 @@ from eemeter.common.adaptive_loss import adaptive_weights
 from eemeter.common.utils import LN_MAX_POS_SYSTEM_VALUE, LN_MIN_POS_SYSTEM_VALUE
 
 
-@numba.jit(nopython=True, error_model="numpy", cache=True)
+@numba.jit(error_model="numpy", cache=True)
 def full_model(
     hdd_bp,
     hdd_beta,
