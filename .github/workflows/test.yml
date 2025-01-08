@@ -24,5 +24,6 @@ jobs:
           if [ "$RUNNER_OS" == "Windows" ]; then
             export NUMBA_DISABLE_JIT=1
           fi
+        shell: bash
       - name: Run tox with python on PATH
         run: tox -e py
