@@ -19,5 +19,10 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install tox
         run: pip install tox
+      - name: Disable JIT on Windows
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            export NUMBA_DISABLE_JIT=1
+          fi
       - name: Run tox with python on PATH
         run: tox -e py
