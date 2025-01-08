@@ -78,7 +78,7 @@ def test_OoM():
     x = 5000
     with pytest.raises(Exception) as e:
         OoM(x)
-    assert type(e) in [numba.core.errors.TypingError, TypeError] #will depend whether using JIT
+    assert e.type in [numba.core.errors.TypingError, TypeError] #will depend whether using JIT
 
     # Test case 2: Test with an array input
     x = np.array([100, 1000, 10000, 100000])
