@@ -32,3 +32,6 @@ from . import (
 
 # Set default logging handler to avoid "No handler found" warnings.
 _logging.getLogger(__name__).addHandler(_logging.NullHandler())
+
+from numba import config
+config.DISABLE_JIT = True
