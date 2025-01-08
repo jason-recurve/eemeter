@@ -24,8 +24,8 @@ from .__version__ import __title__, __description__, __url__, __version__
 from .__version__ import __author__, __author_email__, __license__
 from .__version__ import __copyright__
 
-from numba import config
-config.DISABLE_JIT = True
+import os
+os.environ["DISABLE_JIT"] = "1"
 
 from .common import *
 from . import (
