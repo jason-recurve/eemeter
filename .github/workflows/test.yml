@@ -8,7 +8,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.9", "3.10", "3.11"] #3.12 breaks due to snapshottest
-        os: [ubuntu-latest, windows-latest, macos-13] # add macos-14 once nlopt issue is solved
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14] # add macos-14 once nlopt issue is solved
     runs-on: ${{ matrix.os }}
 
     steps:
