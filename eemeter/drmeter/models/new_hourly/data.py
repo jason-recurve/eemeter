@@ -21,7 +21,6 @@
 from pathlib import Path
 import copy
 from typing import Optional, Union
-from datetime import date
 
 from eemeter.eemeter.common.data_processor_utilities import (
     compute_minimum_granularity,
@@ -79,11 +78,11 @@ class NREL_Weather_API:  # TODO: reload data for all years
             df.columns = [x.lower().replace(" ", "_") for x in df.columns]
 
             if self.round_minutes_method == "floor":
-                df["datetime"] = df["datetime"].dt.floor("h")
+                df["datetime"] = df["datetime"].dt.floor("H")
             elif self.round_minutes_method == "ceil":
-                df["datetime"] = df["datetime"].dt.ceil("h")
+                df["datetime"] = df["datetime"].dt.ceil("H")
             elif self.round_minutes_method == "round":
-                df["datetime"] = df["datetime"].dt.round("h")
+                df["datetime"] = df["datetime"].dt.round("H")
 
             df = df.set_index("datetime")
 
@@ -151,7 +150,8 @@ class _HourlyData:
     Will raise exception during data sufficiency check if instantiated
     """
 
-    def __init__(self, df: pd.DataFrame, is_electricity_data: bool, pv_start: Union[date, str, None] = None, **kwargs: dict):
+    # TODO do we need to specify elec? consider a default true? how common are hourly gas meters
+    def __init__(self, df: pd.DataFrame, is_electricity_data: bool, **kwargs: dict):
         self._df = None
         self.warnings = []
         self.disqualification = []
@@ -159,25 +159,27 @@ class _HourlyData:
         self.tz = None
 
         # TODO copied from HourlyData
-        self._to_be_interpolated_columns = []
-        self._outputs = []
-
+        self.to_be_interpolated_columns = []
+        self.interp = None
+        self.outputs = []
         self.pv_start = None
-        if pv_start is not None:
-            self.pv_start = pd.to_datetime(pv_start).date()
 
-        # TODO not sure why we're keeping this copy, just set the attrs
-        self._kwargs = copy.deepcopy(kwargs)
-        if "outputs" in self._kwargs:
-            self._outputs = copy.deepcopy(self._kwargs["outputs"])
+        self.kwargs = copy.deepcopy(kwargs)
+        if "outputs" in self.kwargs:
+            self.outputs = copy.deepcopy(self.kwargs["outputs"])
         else:
-            self._outputs = ["temperature", "observed"]
+            self.outputs = ["temperature", "observed"]
 
-        self._missing_values_amount = {}
-        self._too_many_missing_data = False
+        self.missing_values_amount = {}
+        self.too_many_missing_data = False
 
         self._df = self._set_data(df)
-        disqualification, warnings = self._check_data_sufficiency()
+
+        # sufficiency_df = self._df.merge(
+        #     temp_coverage, left_index=True, right_index=True, how="left"
+        # )
+        # disqualification, warnings = self._check_data_sufficiency(sufficiency_df)
+        disqualification, warnings = [], []
 
         self.disqualification += disqualification
         self.warnings += warnings
@@ -185,11 +187,28 @@ class _HourlyData:
 
     @property
     def df(self):
-        """Get the corrected input data stored in the class. The actual dataframe is immutable, this returns a copy."""
+        """
+        Get the corrected input data stored in the class. The actual dataframe is immutable, this returns a copy.
+
+        Returns
+        -------
+            pandas.DataFrame or None: A copy of the DataFrame if it exists, otherwise None.
+        """
         if self._df is None:
             return None
         else:
             return self._df.copy()
+
+    @classmethod
+    def from_series(
+        cls,
+        meter_data: Union[pd.Series, pd.DataFrame],
+        temperature_data: Union[pd.Series, pd.DataFrame],
+        is_electricity_data,
+    ):
+        raise NotImplementedError(
+            "Unimplemented until full release--use regular constructor with complete hourly dataframe."
+        )
 
     def log_warnings(self):
         """
@@ -210,7 +229,7 @@ class _HourlyData:
 
         # create a new index with all the hours between the earliest and latest datetime
         complete_dt = pd.date_range(
-            start=earliest_datetime, end=latest_datetime, freq="h"
+            start=earliest_datetime, end=latest_datetime, freq="H"
         )
 
         # merge meter data with complete_dt
@@ -225,49 +244,55 @@ class _HourlyData:
     def _interpolate(self, df):
         # make column of interpolated boolean if any observed or temperature is nan
         # check if in each row of the columns in output has nan values, the interpolated column will be true
-        if "to_be_interpolated_columns" in self._kwargs:
-            self._to_be_interpolated_columns = self._kwargs[
+        if "to_be_interpolated_columns" in self.kwargs:
+            self.to_be_interpolated_columns = self.kwargs[
                 "to_be_interpolated_columns"
             ].copy()
-            self._outputs += [
+            self.outputs += [
                 f"{col}"
-                for col in self._to_be_interpolated_columns
-                if col not in self._outputs
+                for col in self.to_be_interpolated_columns
+                if col not in self.outputs
             ]
         else:
-            self._to_be_interpolated_columns = ["temperature", "observed"]
+            self.to_be_interpolated_columns = ["temperature", "observed"]
             if "ghi" in df.columns:
-                self._to_be_interpolated_columns.append("ghi")
+                self.to_be_interpolated_columns.append("ghi")
 
-        # for col in self._outputs:
-        #     if col not in self._to_be_interpolated_columns: #TODO: this might be diffrent for supplemental data
-        #         self._to_be_interpolated_columns += [col]
+        # for col in self.outputs:
+        #     if col not in self.to_be_interpolated_columns: #TODO: this might be diffrent for supplemental data
+        #         self.to_be_interpolated_columns += [col]
 
         # #TODO: remove this in the actual implementation, this is just for CalTRACK testing
-        # if 'model' in self._outputs:
-        #     self._to_be_interpolated_columns += ['model']
+        # if 'model' in self.outputs:
+        #     self.to_be_interpolated_columns += ['model']
 
-        for col in self._to_be_interpolated_columns:
+        for col in self.to_be_interpolated_columns:
             if f"interpolated_{col}" in df.columns:
                 continue
-            self._outputs += [f"interpolated_{col}"]
+            self.outputs += [f"interpolated_{col}"]
 
         # check how many nans are in the columns
-        nan_numbers_cols = df[self._to_be_interpolated_columns].isna().sum()
+        nan_numbers_cols = df[self.to_be_interpolated_columns].isna().sum()
         # if the number of nan is more than max_missing_hours_pct, then we we flag them
         # TODO: this should be as a part of disqualification and warning/error logs
-        for col in self._to_be_interpolated_columns:
+        for col in self.to_be_interpolated_columns:
             if nan_numbers_cols[col] > len(df) * _MAX_MISSING_HOURS_PCT / 100:
-                if not self._too_many_missing_data:
-                    self._too_many_missing_data = True
-                self._missing_values_amount[col] = nan_numbers_cols[col]
+                if not self.too_many_missing_data:
+                    self.too_many_missing_data = True
+                self.missing_values_amount[col] = nan_numbers_cols[col]
 
         # we can add kwargs to the interpolation class like: inter_kwargs = {"n_cor_idx": self.kwargs["n_cor_idx"]}
-        df = interpolate(df, columns=self._to_be_interpolated_columns)
+        df = interpolate(df, columns=self.to_be_interpolated_columns)
 
         return df
 
     def _add_pv_start_date(self, df, model_type="TS"):
+        # add pv start date here to avoid interpolating the pv start date
+        if "metadata" in self.kwargs:
+            if "pv_start" in self.kwargs["metadata"]:
+                self.pv_start = self.kwargs["metadata"]["pv_start"]
+                if self.pv_start is not None:
+                    self.pv_start = pd.to_datetime(self.pv_start).date()
         if self.pv_start is None:
             self.pv_start = df.index.date.min()
 
@@ -286,7 +311,7 @@ class _HourlyData:
         ).tz_convert(meter.index.tz)
         return df
 
-    def _check_data_sufficiency(self):
+    def _check_data_sufficiency(self, sufficiency_df):
         raise NotImplementedError(
             "Can't instantiate class _HourlyData, use HourlyBaselineData or HourlyReportingData."
         )
@@ -353,30 +378,10 @@ class _HourlyData:
 
 
 class HourlyBaselineData(_HourlyData):
-    """Data class to represent Hourly Baseline Data.
-
-    Only baseline data should go into the dataframe input, no blackout data should be input.
-    Checks sufficiency for the data provided as input depending on OpenEEMeter specifications and populates disqualifications and warnings based on it.
-
-    Args:
-        df (DataFrame): A dataframe having a datetime index or a datetime column with the timezone also being set.
-            It also requires 2 more columns - 'observed' for meter data, and 'temperature' for temperature data.
-            Optionally, column 'ghi' can be included in order to fit on solar data.
-            The temperature column should have values in Fahrenheit. Please convert your temperatures accordingly.
-
-        is_electricity_data (bool): Flag to ascertain if this is electricity data or not. Electricity data values of 0 are set to NaN.
-
-    Attributes:
-        df (DataFrame): Immutable dataframe that contains the meter and temperature values for the baseline data period.
-        disqualification (list[EEMeterWarning]): A list of serious issues with the data that can degrade the quality of the model. If you want to go ahead with building the model while ignoring them, set the ignore_disqualification = True flag in the model. By default disqualifications are not ignored.
-        warnings (list[EEMeterWarning]): A list of issues with the data, but none that will severely reduce the quality of the model built.
-        pv_start (datetime.date): Solar install date. If left unset, assumed to be at beginning of data.
-
-    """
-    def _check_data_sufficiency(self):
-        data = _create_sufficiency_df(self.df)
+    def _check_data_sufficiency(self, sufficiency_df):
+        return [], []
         hsc = HourlySufficiencyCriteria(
-            data=data, is_electricity_data=self.is_electricity_data
+            data=sufficiency_df, is_electricity_data=self.is_electricity_data
         )
         hsc.check_sufficiency_baseline()
         disqualification = hsc.disqualification
@@ -385,54 +390,21 @@ class HourlyBaselineData(_HourlyData):
         return disqualification, warnings
 
 
-
 class HourlyReportingData(_HourlyData):
-    """Data class to represent Hourly Reporting Data.
-
-    Only reporting data should go into the dataframe input, no blackout data should be input.
-    Checks sufficiency for the data provided as input depending on OpenEEMeter specifications and populates disqualifications and warnings based on it.
-
-    Meter data input is optional for the reporting class.
-
-    Args:
-        df (DataFrame): A dataframe having a datetime index or a datetime column with the timezone also being set.
-            It also requires 2 more columns - 'observed' for meter data, and 'temperature' for temperature data.
-            If GHI was provided during the baseline period, it should also be supplied for the reporting period with column name 'ghi'.
-            The temperature column should have values in Fahrenheit. Please convert your temperatures accordingly.
-
-        is_electricity_data (bool): Flag to ascertain if this is electricity data or not. Electricity data values of 0 are set to NaN.
-
-    Attributes:
-        df (DataFrame): Immutable dataframe that contains the meter and temperature values for the baseline data period.
-        disqualification (list[EEMeterWarning]): A list of serious issues with the data that can degrade the quality of the model. If you want to go ahead with building the model while ignoring them, set the ignore_disqualification = True flag in the model. By default disqualifications are not ignored.
-        warnings (list[EEMeterWarning]): A list of issues with the data, but none that will severely reduce the quality of the model built.
-        pv_start (datetime.date): Solar install date. If left unset, assumed to be at beginning of data.
-    """
-
-    def __init__(self, df: pd.DataFrame, is_electricity_data: bool, pv_start: Union[date, str, None] = None, **kwargs: dict):
+    def __init__(self, df: pd.DataFrame, is_electricity_data: bool, **kwargs: dict):
         df = df.copy()
         if "observed" not in df.columns:
             df["observed"] = np.nan
 
-        super().__init__(df, is_electricity_data, pv_start, **kwargs)
+        super().__init__(df, is_electricity_data, **kwargs)
 
-    def _check_data_sufficiency(self):
-        data = _create_sufficiency_df(self.df)
+    def _check_data_sufficiency(self, sufficiency_df):
+        return [], []
         hsc = HourlySufficiencyCriteria(
-            data=data, is_electricity_data=self.is_electricity_data
+            data=sufficiency_df, is_electricity_data=self.is_electricity_data
         )
         hsc.check_sufficiency_reporting()
         disqualification = hsc.disqualification
         warnings = hsc.warnings
 
         return disqualification, warnings
-
-
-def _create_sufficiency_df(df: pd.DataFrame):
-    """Creates dataframe equivalent to legacy hourly input"""
-    df.loc[df["interpolated_observed"] == 1, "observed"] = np.nan
-    df.loc[df["interpolated_temperature"] == 1, "temperature"] = np.nan
-    # set temperature_not_null  to 1.0 if temperature is not null
-    df["temperature_not_null"] = df["temperature"].notnull().astype(float)
-    df["temperature_null"] = df["temperature"].isnull().astype(float)
-    return df

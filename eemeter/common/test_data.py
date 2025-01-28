@@ -203,7 +203,7 @@ def _download_repo_data_file(file):
     repo_full_name = "openeemeter/eemeter"
     path = "data"
 
-    url = f"https://raw.githubusercontent.com/{repo_full_name}/{branch}/{path}/{file}"
+    url = f"https://raw.githubusercontent.com/{repo_full_name}/{branch}/{path}/{file.name}"
 
     r = requests.get(url)
     r.raise_for_status()
