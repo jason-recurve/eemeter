@@ -1,6 +1,5 @@
 [project]
 name = "eemeter"
-dynamic = ["version"]
 description = "Open Demand-Side Measurement"
 readme = "README.md"
 requires-python = ">=3.9, <3.13"
@@ -41,3 +40,6 @@ Homepage = "http://github.com/opendsm/opendsm"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "opendsm/__version__.py"
