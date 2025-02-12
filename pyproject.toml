@@ -1,5 +1,5 @@
 [project]
-name = "eemeter"
+name = "eemeter-test"
 description = "Open Demand-Side Measurement"
 dynamic = ["version"]
 readme = "README.md"
