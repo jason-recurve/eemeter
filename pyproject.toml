@@ -43,4 +43,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "opendsm/__version__.py"
+path = "eemeter/__version__.py"
